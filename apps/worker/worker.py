@@ -1,10 +1,3 @@
-import os
-from celery import Celery
+from eventops.tasks import celery_app, process_event  # noqa: F401 – re-export for Celery discovery
 
-BROKER_URL = os.environ["CELERY_BROKER_URL"]
-
-celery_app = Celery("eventops", broker=BROKER_URL)
-
-@celery_app.task(name="eventops.ping")
-def ping():
-    return "pong"
+__all__ = ["celery_app"]
