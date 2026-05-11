@@ -20,6 +20,7 @@ class EventResponse(BaseModel):
     type: str
     payload: dict[str, Any]
     status: EventStatus
+    retry_count: int
     created_at: datetime
     processed_at: datetime | None
     error_reason: str | None

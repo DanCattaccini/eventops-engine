@@ -42,6 +42,28 @@ def ingest_event(
     return event
 
 
+@router.post("/{event_id}/replay", response_model=EventResponse)
+def replay_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.status not in (EventStatus.DEAD, EventStatus.FAILED):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only DEAD or FAILED events can be replayed (current status: {event.status})",
+        )
+
+    event.status = EventStatus.RECEIVED
+    event.retry_count = 0
+    event.error_reason = None
+    event.processed_at = None
+    db.commit()
+    db.refresh(event)
+
+    process_event.delay(str(event.id))
+    return event
+
+
 @router.get("/{event_id}", response_model=EventResponse)
 def get_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
     event = db.get(Event, event_id)
