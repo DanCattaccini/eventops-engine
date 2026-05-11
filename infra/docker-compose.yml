@@ -9,6 +9,10 @@ services:
       - "5432:5432"
     volumes:
       - eventops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -18,16 +22,35 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: poetry run alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
     ports:
       - "8000:8000"
     depends_on:
-      - rabbitmq
-      - postgres
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
 
   worker:
     build:
@@ -35,9 +58,12 @@ services:
       dockerfile: apps/worker/Dockerfile
     environment:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
-      - rabbitmq
-      - postgres
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   eventops_pgdata:
